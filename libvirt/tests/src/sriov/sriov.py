@@ -194,11 +194,11 @@ def run(test, params, env):
                 new_vf = netxml.new_vf_address(**{'attrs': attrs})
                 vf_addr_list.append(new_vf)
             netxml.driver = {'name': 'vfio'}
-            netxml.forward = {"mode": "hostdev", "managed": "yes"}
+            netxml.forward = {"mode": "hostdev", "managed": managed}
             netxml.vf_list = vf_addr_list
         else:
             netxml.pf = {"dev": pf_name}
-            netxml.forward = {"mode": "hostdev", "managed": "yes"}
+            netxml.forward = {"mode": "hostdev", "managed": managed}
         netxml.name = net_name
         logging.debug(netxml)
         return netxml
@@ -356,6 +356,7 @@ def run(test, params, env):
         """
         if managed == "no":
             result = virsh.nodedev_detach(nodedev_pci_addr)
+            logging.debug(nodedev_pci_addr)
             utils_test.libvirt.check_exit_status(result, expect_error=False)
         logging.debug(new_iface)
         result = virsh.attach_device(vm_name, file_opt=new_iface.xml, flagstr=option, debug=True)
@@ -410,6 +411,7 @@ def run(test, params, env):
     including_pf = "yes" == params.get("including_pf", "no")
     max_vfs_attached = "yes" == params.get("max_vfs_attached", "no")
     inactive_pool = "yes" == params.get("inactive_pool", "no")
+    duplicate_vf = "yes" == params.get("duplicate_vf", "no")
 
     vmxml = vm_xml.VMXML.new_from_inactive_dumpxml(vm_name)
     backup_xml = vmxml.copy()
@@ -518,6 +520,14 @@ def run(test, params, env):
             expected_error = "is not an SR-IOV Virtual Function"
             netxml = create_hostdev_network()
             result = virsh.net_define(netxml.xml, ignore_status=True, debug=True)
+            utils_test.libvirt.check_result(result, expected_fails=expected_error)
+        if duplicate_vf:
+            vf_list[5] = vf_list[0]
+            expected_error = "can only be listed once in network"
+            netxml = create_hostdev_network()
+            result = virsh.net_define(netxml.xml, ignore_status=True, debug=True)
+            utils_test.libvirt.check_result(result, expected_fails=expected_error)
+            result = virsh.net_create(netxml.xml, ignore_status=True, debug=True)
             utils_test.libvirt.check_result(result, expected_fails=expected_error)
     finally:
         if vm.is_alive():
